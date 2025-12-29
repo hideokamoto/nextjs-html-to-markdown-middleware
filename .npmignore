@@ -1,0 +1,38 @@
+# Source files
+src/
+__tests__/
+examples/
+scripts/
+
+# Configuration files
+tsconfig.json
+tsconfig.cjs.json
+vitest.config.ts
+biome.json
+
+# Development files
+.git/
+.gitignore
+.cursorignore
+
+# Testing
+coverage/
+.nyc_output
+
+# Misc
+.DS_Store
+*.pem
+*.log
+.env*.local
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Documentation (keep README.md and LICENSE)
+CHANGELOG.md
+
