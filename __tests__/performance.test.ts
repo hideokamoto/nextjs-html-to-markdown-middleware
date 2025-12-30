@@ -74,8 +74,8 @@ describe('Performance Tests', () => {
     const endTime = performance.now();
     const avgDuration = (endTime - startTime) / iterations;
 
-    // 1回あたりの変換が10ms以内
-    expect(avgDuration).toBeLessThan(10);
+    // 1回あたりの変換が20ms以内（jsdomはLinkedomより遅い）
+    expect(avgDuration).toBeLessThan(20);
   });
 
   it('早期リターンが高速に動作する', async () => {

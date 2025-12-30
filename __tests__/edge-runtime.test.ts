@@ -27,7 +27,10 @@ describe('Edge Runtime Compatibility', () => {
       ok: true,
       status: 200,
       text: async () => html,
-      headers: new Headers({ 'content-length': String(html.length) }),
+      headers: new Headers({
+        'content-type': 'text/html',
+        'content-length': String(html.length),
+      }),
     });
 
     const request = new NextRequest(
@@ -61,7 +64,10 @@ describe('Edge Runtime Compatibility', () => {
       ok: true,
       status: 200,
       text: async () => html,
-      headers: new Headers({ 'content-length': String(html.length) }),
+      headers: new Headers({
+        'content-type': 'text/html',
+        'content-length': String(html.length),
+      }),
     });
 
     const request = new NextRequest(
