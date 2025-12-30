@@ -14,25 +14,9 @@ describe('Security Tests', () => {
   });
 
   describe('SSRF対策', () => {
-    it('外部URLへのリクエストを拒否する', async () => {
-      // このテストはSSRFチェックが正しく機能することを確認
-      // hostヘッダーはlocalhostだが、リクエストURLがexample.comの場合を想定
-      // 実際のmiddlewareではbuildAbsoluteUrlでURLを構築するため、
-      // 直接的なSSRFチェックはvalidateInternalRequestの単体テストで確認
-      const request = new NextRequest(
-        new URL('http://example.com/test.md'),
-        {
-          headers: { host: 'localhost:3000' },
-        },
-      );
-
-      const result = await handleMarkdownRequest(request);
-      expect(result).not.toBeNull();
-      // buildAbsoluteUrlがlocalhost:3000でURLを構築するため、
-      // 実際にはlocalhost:3000/testへのリクエストになる
-      // SSRFチェックの直接テストはutils.test.tsで行う
-      expect(result?.status).not.toBe(200);
-    });
+    // 外部URL拒否の直接テストはutils.test.tsのvalidateInternalRequestで行う
+    // middlewareはbuildAbsoluteUrlでhostヘッダーからURLを構築するため、
+    // 統合テストではlocalhostへのリクエスト許可のみ確認する
 
     it('localhostへのリクエストを許可する', async () => {
       const html = '<html><body><h1>Test</h1></body></html>';

@@ -71,8 +71,8 @@ export function createMarkdownHandler(options: MarkdownRouteHandlerOptions = {})
     // Next.js 15+ ではparamsがPromiseになる可能性がある
     const resolvedParams = params instanceof Promise ? await params : params;
     const path = '/' + resolvedParams.path.join('/');
-    const host = request.headers.get('host') || 'localhost:3000';
-    const protocol = request.headers.get('x-forwarded-proto') || 'https';
+    const host = request.headers.get('host') ?? 'localhost:3000';
+    const protocol = request.headers.get('x-forwarded-proto') ?? 'https';
     const baseUrl = `${protocol}://${host}`;
     const targetUrl = `${baseUrl}${path}`;
 

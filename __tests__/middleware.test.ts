@@ -67,27 +67,24 @@ describe('middleware', () => {
       expect(result?.status).toBe(404);
     });
 
-    it('外部URLを拒否する', async () => {
-      // URLはexample.comだが、リクエストのhostはlocalhost（異なるホスト）
+    it('内部URLへのリクエストでfetchが呼ばれる', async () => {
+      // 内部URL（localhost）へのリクエストはSSRFチェックをパスしてfetchが呼ばれる
       const request = new NextRequest(
         new URL('http://localhost:3000/test.md'),
         {
           headers: { host: 'localhost:3000' },
         },
       );
-      // middlewareがbuildAbsoluteUrlで構築するURLを外部URLに変更するため、
-      // モックを使って外部URLへのリクエストをシミュレート
       (global.fetch as unknown) = vi.fn().mockResolvedValue({
         ok: false,
         status: 404,
         statusText: 'Not Found',
       });
 
-      // このテストは実際の外部URL拒否ではなく、SSRFチェックをテストする
-      // SSRFチェックの直接的なテストはutils.testの方が適切
-      const result = await handleMarkdownRequest(request);
+      await handleMarkdownRequest(request);
 
-      // fetchが呼ばれたことを確認（SSRFチェックをパスした）
+      // SSRFチェックをパスしてfetchが呼ばれたことを確認
+      // 外部URL拒否の直接テストはutils.test.tsのvalidateInternalRequestテストで行う
       expect(global.fetch).toHaveBeenCalled();
     });
 

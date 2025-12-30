@@ -76,8 +76,8 @@ export function convertHtmlToMarkdown(
     ? new TurndownService(createTurndownConfig(options))
     : getTurndownService();
 
-  // TurndownはHTML文字列を直接受け取れるため、DOM解析を省略
-  // これにより Edge Runtime での互換性を確保しつつシンプルに保つ
+  // TurndownはHTML文字列を直接受け取り、内部でjsdomを使用してDOM解析を行う
+  // jsdomはNode.js専用のため、Next.jsではRoute Handlerで runtime = 'nodejs' を指定する必要がある
   return service.turndown(htmlWithBase);
 }
 

@@ -9,7 +9,6 @@
     "test": "node test-middleware.mjs"
   },
   "dependencies": {
-    "linkedom": "^0.18.12",
     "next": "^14.2.0",
     "next-markdown-middleware": "file:../../",
     "react": "^18.2.0",
