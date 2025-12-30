@@ -48,14 +48,25 @@ export function validateInternalRequest(
   }
 
   // ホスト名の比較（ポート番号を除去）
-  const requestHostname = requestHost.split(':')[0];
+  // IPv6アドレスの場合、ブラケットを除去してからポート番号を除去
+  let requestHostname = requestHost;
+  if (requestHostname.startsWith('[')) {
+    // IPv6: [::1]:3000 -> ::1
+    const closeBracket = requestHostname.indexOf(']');
+    if (closeBracket !== -1) {
+      requestHostname = requestHostname.slice(1, closeBracket);
+    }
+  } else {
+    // IPv4/hostname: localhost:3000 -> localhost
+    requestHostname = requestHostname.split(':')[0];
+  }
   const urlHostname = url.hostname;
 
-  // localhost、127.0.0.1、または同じホスト名の場合のみ許可
+  // localhost、127.0.0.1、::1、または同じホスト名の場合のみ許可
   const isLocalhost =
     urlHostname === 'localhost' ||
     urlHostname === '127.0.0.1' ||
-    urlHostname === '[::1]' ||
+    urlHostname === '::1' ||
     urlHostname === requestHostname;
 
   if (!isLocalhost) {
@@ -74,6 +85,8 @@ export function validateInternalRequest(
  *
  * @param request - Next.jsリクエストオブジェクト
  * @param forwardHeaders - 転送するヘッダー名のリスト（オプション）
+ *                         指定された場合、SAFE_HEADERSとの交差のみが転送される
+ *                         指定されない場合、すべてのSAFE_HEADERSが転送される
  * @returns 抽出された安全なヘッダー
  * @example
  * ```typescript
@@ -86,8 +99,8 @@ export function extractSafeHeaders(
 ): Headers {
   const headers = new Headers();
 
-  // カスタム転送ヘッダーを追加（安全なヘッダーのみ）
   if (forwardHeaders) {
+    // forwardHeadersが指定された場合、SAFE_HEADERSとの交差のみを転送
     for (const headerName of forwardHeaders) {
       const lowerName = headerName.toLowerCase();
       if (SAFE_HEADERS.has(lowerName)) {
@@ -97,11 +110,9 @@ export function extractSafeHeaders(
         }
       }
     }
-  }
-
-  // デフォルトの安全なヘッダーを追加（まだ追加されていない場合）
-  for (const headerName of SAFE_HEADERS) {
-    if (!headers.has(headerName)) {
+  } else {
+    // forwardHeadersが指定されない場合、すべてのSAFE_HEADERSを転送
+    for (const headerName of SAFE_HEADERS) {
       const value = request.headers.get(headerName);
       if (value) {
         headers.set(headerName, value);
@@ -123,7 +134,18 @@ export function extractSafeHeaders(
  * if (shouldExcludePath('/api/test', { excludeApiRoutes: true })) {
  *   // APIルートは除外
  * }
+ *
+ * // 文字列パターンは部分一致（パス内の任意の位置にマッチ）
+ * shouldExcludePath('/foo/admin/bar', { paths: ['admin'] }) // true
+ *
+ * // より精密なマッチングにはRegExpを使用
+ * shouldExcludePath('/foo/admin', { paths: [/^\/admin/] }) // false
+ * shouldExcludePath('/admin/bar', { paths: [/^\/admin/] }) // true
  * ```
+ *
+ * @remarks
+ * 文字列パターンは pathname.includes() を使用して部分一致を行います。
+ * セグメント単位やプレフィックスマッチングには RegExp パターンの使用を推奨します。
  */
 export function shouldExcludePath(
   pathname: string,
@@ -189,9 +211,34 @@ export function buildAbsoluteUrl(
   pathname: string,
   request: NextRequest,
 ): URL {
-  const protocol = request.headers.get('x-forwarded-proto') || 'https';
+  // x-forwarded-proto ヘッダーを検証（ホワイトリスト方式）
+  const forwardedProto = request.headers.get('x-forwarded-proto');
+  let protocol = 'https';
+  if (forwardedProto) {
+    const normalizedProto = forwardedProto.trim().toLowerCase();
+    if (normalizedProto === 'http' || normalizedProto === 'https') {
+      protocol = normalizedProto;
+    }
+  }
   const host = request.headers.get('host') || 'localhost';
   return new URL(pathname, `${protocol}://${host}`);
+}
+
+/**
+ * HTML属性値をエスケープ
+ * XSS対策のため、HTMLエンティティに変換
+ *
+ * @param value - エスケープする文字列
+ * @returns エスケープされた文字列
+ * @internal
+ */
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 /**
@@ -207,9 +254,12 @@ export function buildAbsoluteUrl(
  * ```
  */
 export function addBaseTag(html: string, baseUrl: string): string {
+  // XSS対策: baseUrlをエスケープ
+  const safeBaseUrl = escapeHtmlAttribute(baseUrl);
+
   // 既に<base>タグがある場合は置き換え
   const baseTagRegex = /<base[^>]*>/i;
-  const baseTag = `<base href="${baseUrl}">`;
+  const baseTag = `<base href="${safeBaseUrl}">`;
 
   if (baseTagRegex.test(html)) {
     return html.replace(baseTagRegex, baseTag);
