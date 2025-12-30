@@ -31,20 +31,6 @@ export interface ExcludeOptions {
 }
 
 /**
- * Turndown設定
- */
-export interface TurndownOptions {
-  /** 見出しスタイル */
-  headingStyle?: 'atx' | 'setext';
-  /** コードブロックスタイル */
-  codeBlockStyle?: 'fenced' | 'indented';
-  /** 箇条書きマーカー */
-  bulletListMarker?: '-' | '+' | '*';
-  /** その他のTurndownオプション */
-  [key: string]: unknown;
-}
-
-/**
  * Markdown Middlewareのオプション
  */
 export interface MarkdownMiddlewareOptions {
@@ -54,8 +40,6 @@ export interface MarkdownMiddlewareOptions {
   headers?: HeadersOptions;
   /** パス除外設定 */
   exclude?: ExcludeOptions;
-  /** Turndown設定 */
-  turndown?: TurndownOptions;
   /** エラーハンドリング */
   onError?: (error: Error, request: NextRequest) => Response | null;
   /** リクエストサイズ制限（バイト単位、デフォルト: 10MB） */
