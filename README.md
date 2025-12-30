@@ -123,6 +123,16 @@ createMarkdownMiddleware({
 });
 ```
 
+### フェッチタイムアウト設定
+
+```typescript
+createMarkdownMiddleware({
+  fetchTimeout: 30000, // ミリ秒単位（デフォルト: 30000 = 30秒）
+});
+```
+
+タイムアウトが発生した場合、504（Gateway Timeout）エラーを返します。
+
 ## APIリファレンス
 
 ### `createMarkdownMiddleware(options?)`
@@ -182,6 +192,7 @@ interface MarkdownMiddlewareOptions {
   };
   onError?: (error: Error, request: NextRequest) => Response | null;
   maxRequestSize?: number; // バイト単位（デフォルト: 10MB）
+  fetchTimeout?: number; // ミリ秒単位（デフォルト: 30000 = 30秒）
 }
 ```
 
@@ -204,6 +215,17 @@ interface MarkdownMiddlewareOptions {
 - **デフォルト制限**: 10MB（設定可能）
 - **Content-Lengthチェック**: レスポンスヘッダーのContent-Lengthを事前にチェック
 - **実際のサイズチェック**: Content-Lengthヘッダーがない場合も、実際のレスポンスサイズをチェック
+
+### Content-Type検証
+
+- **HTMLコンテンツのみ許可**: レスポンスのContent-Typeが`text/html`または`application/xhtml+xml`でない場合、415（Unsupported Media Type）エラーを返します
+- **セキュリティ**: 意図しないコンテンツタイプの処理を防ぎます
+
+### タイムアウト処理
+
+- **デフォルトタイムアウト**: 30秒（設定可能）
+- **タイムアウト時の動作**: タイムアウトが発生した場合、504（Gateway Timeout）エラーを返します
+- **AbortController**: 内部でAbortControllerを使用してタイムアウトを実装しています
 
 ### 相対URL解決
 
