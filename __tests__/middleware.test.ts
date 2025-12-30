@@ -26,7 +26,10 @@ describe('middleware', () => {
         ok: true,
         status: 200,
         text: async () => html,
-        headers: new Headers({ 'content-length': String(html.length) }),
+        headers: new Headers({
+          'content-type': 'text/html',
+          'content-length': String(html.length),
+        }),
       });
 
       const request = new NextRequest(
@@ -64,17 +67,25 @@ describe('middleware', () => {
       expect(result?.status).toBe(404);
     });
 
-    it('外部URLを拒否する', async () => {
+    it('内部URLへのリクエストでfetchが呼ばれる', async () => {
+      // 内部URL（localhost）へのリクエストはSSRFチェックをパスしてfetchが呼ばれる
       const request = new NextRequest(
-        new URL('http://example.com/test.md'),
+        new URL('http://localhost:3000/test.md'),
         {
-          headers: { host: 'example.com' },
+          headers: { host: 'localhost:3000' },
         },
       );
-      const result = await handleMarkdownRequest(request);
+      (global.fetch as unknown) = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+      });
 
-      expect(result).not.toBeNull();
-      expect(result?.status).toBe(403);
+      await handleMarkdownRequest(request);
+
+      // SSRFチェックをパスしてfetchが呼ばれたことを確認
+      // 外部URL拒否の直接テストはutils.test.tsのvalidateInternalRequestテストで行う
+      expect(global.fetch).toHaveBeenCalled();
     });
 
     it('リクエストサイズ制限を適用する', async () => {
@@ -84,6 +95,7 @@ describe('middleware', () => {
         status: 200,
         text: async () => largeHtml,
         headers: new Headers({
+          'content-type': 'text/html',
           'content-length': String(largeHtml.length),
         }),
       });
@@ -108,7 +120,10 @@ describe('middleware', () => {
         ok: true,
         status: 200,
         text: async () => html,
-        headers: new Headers({ 'content-length': String(html.length) }),
+        headers: new Headers({
+          'content-type': 'text/html',
+          'content-length': String(html.length),
+        }),
       });
 
       const request = new NextRequest(
@@ -131,7 +146,10 @@ describe('middleware', () => {
         ok: true,
         status: 200,
         text: async () => html,
-        headers: new Headers({ 'content-length': String(html.length) }),
+        headers: new Headers({
+          'content-type': 'text/html',
+          'content-length': String(html.length),
+        }),
       });
 
       const request = new NextRequest(

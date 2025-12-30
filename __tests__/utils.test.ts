@@ -13,7 +13,9 @@ describe('utils', () => {
   describe('validateInternalRequest', () => {
     it('相対パスを許可する', () => {
       const url = new URL('/test', 'http://localhost');
-      const request = new NextRequest(new URL('http://localhost/test'));
+      const request = new NextRequest(new URL('http://localhost/test'), {
+        headers: { host: 'localhost' },
+      });
       const result = validateInternalRequest(url, request);
       expect(result.isValid).toBe(true);
     });

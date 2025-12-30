@@ -75,6 +75,9 @@ export function convertHtmlToMarkdown(
   const service = options
     ? new TurndownService(createTurndownConfig(options))
     : getTurndownService();
+
+  // TurndownはHTML文字列を直接受け取り、内部でjsdomを使用してDOM解析を行う
+  // jsdomはNode.js専用のため、Next.jsではRoute Handlerで runtime = 'nodejs' を指定する必要がある
   return service.turndown(htmlWithBase);
 }
 
@@ -91,4 +94,3 @@ export function convertHtmlToMarkdown(
 export function resetTurndownService(): void {
   turndownServiceInstance = null;
 }
-
