@@ -10,35 +10,69 @@ import {
   handleMarkdownRequest,
 } from '../src/middleware';
 
-// fetchをモック
-global.fetch = vi.fn();
+/**
+ * fetchの成功レスポンスをモックするヘルパー関数
+ */
+function mockFetchSuccess(
+  html: string,
+  options?: {
+    status?: number;
+    contentType?: string;
+    contentLength?: number;
+  },
+): void {
+  const status = options?.status ?? 200;
+  const contentType = options?.contentType ?? 'text/html';
+  const contentLength = options?.contentLength ?? html.length;
+
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(
+      new Response(html, {
+        status,
+        headers: {
+          'content-type': contentType,
+          'content-length': String(contentLength),
+        },
+      }),
+    ),
+  );
+}
+
+/**
+ * fetchのエラーレスポンスをモックするヘルパー関数
+ */
+function mockFetchError(error: Error): void {
+  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(error));
+}
+
+/**
+ * テスト用のNextRequestを作成するヘルパー関数
+ */
+function createTestRequest(
+  path: string,
+  headers?: Record<string, string>,
+): NextRequest {
+  const defaultHeaders = { host: 'localhost:3000', ...headers };
+  return new NextRequest(new URL(`http://localhost:3000${path}`), {
+    headers: defaultHeaders,
+  });
+}
 
 describe('examples/basic-usage.ts の動作検証', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
   });
 
   describe('基本的な使用例', () => {
     it('createMarkdownMiddleware()が正しく動作する', async () => {
       const html = '<html><body><h1>Hello World</h1></body></html>';
-      (global.fetch as unknown) = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        text: async () => html,
-        headers: new Headers({
-          'content-type': 'text/html',
-          'content-length': String(html.length),
-        }),
-      });
+      mockFetchSuccess(html);
 
       // examples/basic-usage.ts の基本的な使用例を再現
       const middleware = createMarkdownMiddleware();
-      const request = new NextRequest(
-        new URL('http://localhost:3000/test.md'),
-        {
-          headers: { host: 'localhost:3000' },
-        },
-      );
+      const request = createTestRequest('/test.md');
 
       const result = await middleware(request);
 
@@ -54,15 +88,7 @@ describe('examples/basic-usage.ts の動作検証', () => {
   describe('オプション付きの使用例', () => {
     it('cacheオプションが正しく動作する', async () => {
       const html = '<html><body><h1>Test</h1></body></html>';
-      (global.fetch as unknown) = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        text: async () => html,
-        headers: new Headers({
-          'content-type': 'text/html',
-          'content-length': String(html.length),
-        }),
-      });
+      mockFetchSuccess(html);
 
       // examples/basic-usage.ts のオプション付き使用例を再現
       const middleware = createMarkdownMiddleware({
@@ -72,13 +98,7 @@ describe('examples/basic-usage.ts の動作検証', () => {
         },
       });
 
-      const request = new NextRequest(
-        new URL('http://localhost:3000/test.md'),
-        {
-          headers: { host: 'localhost:3000' },
-        },
-      );
-
+      const request = createTestRequest('/test.md');
       const result = await middleware(request);
 
       expect(result).not.toBeNull();
@@ -87,15 +107,7 @@ describe('examples/basic-usage.ts の動作検証', () => {
 
     it('headersオプションが正しく動作する', async () => {
       const html = '<html><body><h1>Test</h1></body></html>';
-      (global.fetch as unknown) = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        text: async () => html,
-        headers: new Headers({
-          'content-type': 'text/html',
-          'content-length': String(html.length),
-        }),
-      });
+      mockFetchSuccess(html);
 
       const middleware = createMarkdownMiddleware({
         headers: {
@@ -106,16 +118,10 @@ describe('examples/basic-usage.ts の動作検証', () => {
         },
       });
 
-      const request = new NextRequest(
-        new URL('http://localhost:3000/test.md'),
-        {
-          headers: {
-            host: 'localhost:3000',
-            'user-agent': 'test-agent',
-            'accept-language': 'en-US',
-          },
-        },
-      );
+      const request = createTestRequest('/test.md', {
+        'user-agent': 'test-agent',
+        'accept-language': 'en-US',
+      });
 
       const result = await middleware(request);
 
@@ -132,47 +138,24 @@ describe('examples/basic-usage.ts の動作検証', () => {
       });
 
       // /admin パスは除外される
-      const adminRequest = new NextRequest(
-        new URL('http://localhost:3000/admin/test.md'),
-        {
-          headers: { host: 'localhost:3000' },
-        },
-      );
+      const adminRequest = createTestRequest('/admin/test.md');
       const adminResult = await middleware(adminRequest);
       expect(adminResult).toBeInstanceOf(NextResponse);
 
       // /private パスは除外される
-      const privateRequest = new NextRequest(
-        new URL('http://localhost:3000/private/test.md'),
-        {
-          headers: { host: 'localhost:3000' },
-        },
-      );
+      const privateRequest = createTestRequest('/private/test.md');
       const privateResult = await middleware(privateRequest);
       expect(privateResult).toBeInstanceOf(NextResponse);
 
       // APIルートは除外される
-      const apiRequest = new NextRequest(
-        new URL('http://localhost:3000/api/test.md'),
-        {
-          headers: { host: 'localhost:3000' },
-        },
-      );
+      const apiRequest = createTestRequest('/api/test.md');
       const apiResult = await middleware(apiRequest);
       expect(apiResult).toBeInstanceOf(NextResponse);
     });
 
     it('turndownオプションが正しく動作する', async () => {
       const html = '<html><body><h1>Test</h1><ul><li>Item</li></ul></body></html>';
-      (global.fetch as unknown) = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        text: async () => html,
-        headers: new Headers({
-          'content-type': 'text/html',
-          'content-length': String(html.length),
-        }),
-      });
+      mockFetchSuccess(html);
 
       const middleware = createMarkdownMiddleware({
         turndown: {
@@ -182,13 +165,7 @@ describe('examples/basic-usage.ts の動作検証', () => {
         },
       });
 
-      const request = new NextRequest(
-        new URL('http://localhost:3000/test.md'),
-        {
-          headers: { host: 'localhost:3000' },
-        },
-      );
-
+      const request = createTestRequest('/test.md');
       const result = await middleware(request);
 
       expect(result).not.toBeNull();
@@ -205,27 +182,15 @@ describe('examples/basic-usage.ts の動作検証', () => {
 
     it('maxRequestSizeオプションが正しく動作する', async () => {
       const largeHtml = 'x'.repeat(11 * 1024 * 1024); // 11MB
-      (global.fetch as unknown) = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        text: async () => largeHtml,
-        headers: new Headers({
-          'content-type': 'text/html',
-          'content-length': String(largeHtml.length),
-        }),
+      mockFetchSuccess(largeHtml, {
+        contentLength: largeHtml.length,
       });
 
       const middleware = createMarkdownMiddleware({
         maxRequestSize: 10 * 1024 * 1024, // 10MB
       });
 
-      const request = new NextRequest(
-        new URL('http://localhost:3000/test.md'),
-        {
-          headers: { host: 'localhost:3000' },
-        },
-      );
-
+      const request = createTestRequest('/test.md');
       const result = await middleware(request);
 
       expect(result).not.toBeNull();
@@ -233,9 +198,7 @@ describe('examples/basic-usage.ts の動作検証', () => {
     });
 
     it('onErrorオプションが正しく動作する', async () => {
-      (global.fetch as unknown) = vi.fn().mockRejectedValue(
-        new Error('Network error'),
-      );
+      mockFetchError(new Error('Network error'));
 
       const customErrorHandler = vi.fn().mockReturnValue(
         new Response(
@@ -251,13 +214,7 @@ describe('examples/basic-usage.ts の動作検証', () => {
         onError: customErrorHandler,
       });
 
-      const request = new NextRequest(
-        new URL('http://localhost:3000/test.md'),
-        {
-          headers: { host: 'localhost:3000' },
-        },
-      );
-
+      const request = createTestRequest('/test.md');
       const result = await middleware(request);
 
       expect(customErrorHandler).toHaveBeenCalled();
@@ -274,23 +231,10 @@ describe('examples/basic-usage.ts の動作検証', () => {
   describe('既存のmiddlewareに統合する例', () => {
     it('handleMarkdownRequestが正しく動作する', async () => {
       const html = '<html><body><h1>Test</h1></body></html>';
-      (global.fetch as unknown) = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        text: async () => html,
-        headers: new Headers({
-          'content-type': 'text/html',
-          'content-length': String(html.length),
-        }),
-      });
+      mockFetchSuccess(html);
 
       // examples/basic-usage.ts の統合例を再現
-      const request = new NextRequest(
-        new URL('http://localhost:3000/test.md'),
-        {
-          headers: { host: 'localhost:3000' },
-        },
-      );
+      const request = createTestRequest('/test.md');
 
       const markdownResponse = await handleMarkdownRequest(request, {
         cache: { enabled: true },
@@ -306,12 +250,7 @@ describe('examples/basic-usage.ts の動作検証', () => {
 
     it('handleMarkdownRequestがnullを返す場合の処理', async () => {
       // .md拡張子がない場合はnullを返す
-      const request = new NextRequest(
-        new URL('http://localhost:3000/test'),
-        {
-          headers: { host: 'localhost:3000' },
-        },
-      );
+      const request = createTestRequest('/test');
 
       const markdownResponse = await handleMarkdownRequest(request, {
         cache: { enabled: true },
@@ -324,15 +263,7 @@ describe('examples/basic-usage.ts の動作検証', () => {
   describe('examplesファイルの全オプションを組み合わせた使用例', () => {
     it('すべてのオプションを組み合わせて使用できる', async () => {
       const html = '<html><body><h1>Test</h1></body></html>';
-      (global.fetch as unknown) = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        text: async () => html,
-        headers: new Headers({
-          'content-type': 'text/html',
-          'content-length': String(html.length),
-        }),
-      });
+      mockFetchSuccess(html);
 
       // examples/basic-usage.ts の middlewareWithOptions を再現
       const middleware = createMarkdownMiddleware({
@@ -368,16 +299,10 @@ describe('examples/basic-usage.ts の動作検証', () => {
         },
       });
 
-      const request = new NextRequest(
-        new URL('http://localhost:3000/test.md'),
-        {
-          headers: {
-            host: 'localhost:3000',
-            'user-agent': 'test-agent',
-            'accept-language': 'en-US',
-          },
-        },
-      );
+      const request = createTestRequest('/test.md', {
+        'user-agent': 'test-agent',
+        'accept-language': 'en-US',
+      });
 
       const result = await middleware(request);
 
