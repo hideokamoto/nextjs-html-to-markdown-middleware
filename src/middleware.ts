@@ -93,7 +93,6 @@ export async function handleMarkdownRequest(
     const markdown = convertHtmlToMarkdown(
       html,
       originalUrl.toString(),
-      options?.turndown,
     );
 
     // レスポンスヘッダーを設定
