@@ -19,46 +19,7 @@ describe('README Verification Tests', () => {
   });
 
   describe('READMEに記載されているオプション設定の検証', () => {
-    it('fetchTimeoutオプションが実装されている（READMEに記載されていない）', async () => {
-      const html = '<html><body><h1>Test</h1></body></html>';
-      const controller = new AbortController();
-      
-      (global.fetch as unknown) = vi.fn().mockImplementation(() => {
-        // タイムアウトをシミュレート
-        setTimeout(() => controller.abort(), 100);
-        return new Promise((resolve) => {
-          setTimeout(() => {
-            resolve({
-              ok: true,
-              status: 200,
-              text: async () => html,
-              headers: new Headers({ 'content-length': String(html.length) }),
-            });
-          }, 200);
-        });
-      });
-
-      const request = new NextRequest(
-        new URL('http://localhost:3000/test.md'),
-        {
-          headers: { host: 'localhost:3000' },
-        },
-      );
-
-      // fetchTimeoutオプションが存在することを確認
-      const options: MarkdownMiddlewareOptions = {
-        fetchTimeout: 5000, // 5秒
-      };
-      
-      expect(options.fetchTimeout).toBe(5000);
-      
-      // 実際に使用できることを確認
-      const result = await handleMarkdownRequest(request, options);
-      // タイムアウトが発生する可能性があるため、結果の検証はスキップ
-      expect(options).toHaveProperty('fetchTimeout');
-    });
-
-    it('Content-Type検証が実装されている（READMEに記載されていない）', async () => {
+    it('Content-Typeがtext/htmlまたはapplication/xhtml+xmlでない場合、415エラーを返す', async () => {
       // text/html以外のContent-Typeを返すレスポンスをモック
       (global.fetch as unknown) = vi.fn().mockResolvedValue({
         ok: true,
@@ -88,9 +49,10 @@ describe('README Verification Tests', () => {
       }
     });
 
-    it('タイムアウト処理が実装されている（READMEに記載されていない）', async () => {
-      // タイムアウトをシミュレート
-      const controller = new AbortController();
+    it('fetchTimeoutオプションが設定されている場合、タイムアウト時に504エラーを返す', async () => {
+      // AbortErrorが発生した場合（タイムアウト時）の処理をテスト
+      // handleMarkdownRequest内部のAbortControllerがタイムアウトを検出し、
+      // fetchがAbortErrorを返すことをシミュレート
       (global.fetch as unknown) = vi.fn().mockImplementation(() => {
         return new Promise((_, reject) => {
           setTimeout(() => {
