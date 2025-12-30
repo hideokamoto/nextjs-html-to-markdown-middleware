@@ -1,5 +1,4 @@
 import TurndownService from 'turndown';
-import { JSDOM } from 'jsdom';
 import type { TurndownOptions } from './types';
 import { addBaseTag } from './utils';
 
@@ -70,18 +69,16 @@ export function convertHtmlToMarkdown(
   // <base>タグを追加して相対URLを解決
   const htmlWithBase = addBaseTag(html, baseUrl);
 
-  // JSDOMでHTMLをパース（Node.js runtime用）
-  const dom = new JSDOM(htmlWithBase);
-  const document = dom.window.document;
-
   // TurndownServiceで変換
   // オプションが提供された場合は新しいインスタンスを作成
   // オプションが提供されない場合はシングルトンインスタンスを使用
   const service = options
     ? new TurndownService(createTurndownConfig(options))
     : getTurndownService();
-  // biome-ignore lint/suspicious/noExplicitAny: JSDOMのdocumentは標準のDocument型と互換性がある
-  return service.turndown(document as any);
+
+  // TurndownはHTML文字列を直接受け取れるため、DOM解析を省略
+  // これにより Edge Runtime での互換性を確保しつつシンプルに保つ
+  return service.turndown(htmlWithBase);
 }
 
 /**
@@ -97,4 +94,3 @@ export function convertHtmlToMarkdown(
 export function resetTurndownService(): void {
   turndownServiceInstance = null;
 }
-

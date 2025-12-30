@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+/**
+ * Middleware for redirecting .md requests to the Route Handler
+ *
+ * Note: DOM parsing is required for HTML to Markdown conversion.
+ * Since Next.js Edge Runtime does not have built-in DOM support,
+ * we use a Route Handler with Node.js runtime for the actual conversion.
+ */
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
