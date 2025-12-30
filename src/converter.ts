@@ -39,11 +39,17 @@ function createTurndownConfig(options?: TurndownOptions): {
   bulletListMarker: '-' | '+' | '*';
   [key: string]: unknown;
 } {
+  // 既知の3つのフィールドと残りのオプションを分離
+  const { headingStyle, codeBlockStyle, bulletListMarker, ...restOptions } =
+    options || {};
+
+  // デフォルト値をnullish coalescingで適用（undefinedの場合はデフォルト値を使用）
   return {
-    headingStyle: options?.headingStyle || 'atx',
-    codeBlockStyle: options?.codeBlockStyle || 'fenced',
-    bulletListMarker: options?.bulletListMarker || '-',
-    ...options,
+    headingStyle: headingStyle ?? 'atx',
+    codeBlockStyle: codeBlockStyle ?? 'fenced',
+    bulletListMarker: bulletListMarker ?? '-',
+    // 残りのオプションのみをスプレッド（既知のフィールドは上書きされない）
+    ...restOptions,
   };
 }
 
