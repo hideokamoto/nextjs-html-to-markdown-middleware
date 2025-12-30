@@ -1,5 +1,4 @@
 import type { NextRequest } from 'next/server';
-import type TurndownService from 'turndown';
 
 /**
  * キャッシュ設定
@@ -61,6 +60,8 @@ export interface MarkdownMiddlewareOptions {
   onError?: (error: Error, request: NextRequest) => Response | null;
   /** リクエストサイズ制限（バイト単位、デフォルト: 10MB） */
   maxRequestSize?: number;
+  /** fetchタイムアウト（ミリ秒単位、デフォルト: 30000） */
+  fetchTimeout?: number;
 }
 
 /**
