@@ -1,8 +1,9 @@
 import TurndownService from 'turndown';
+import type { TurndownOptions } from './types';
 import { addBaseTag } from './utils';
 
 /**
- * TurndownServiceのシングルトンインスタンス
+ * TurndownServiceのシングルトンインスタンス（デフォルト設定用）
  */
 let turndownServiceInstance: TurndownService | null = null;
 
@@ -26,21 +27,48 @@ function getTurndownService(): TurndownService {
 }
 
 /**
+ * オプションからTurndownServiceの設定オブジェクトを作成
+ *
+ * @param options - Turndownオプション
+ * @returns TurndownServiceの設定オブジェクト
+ * @internal
+ */
+function createTurndownConfig(options?: TurndownOptions): {
+  headingStyle: 'atx' | 'setext';
+  codeBlockStyle: 'fenced' | 'indented';
+  bulletListMarker: '-' | '+' | '*';
+  [key: string]: unknown;
+} {
+  return {
+    headingStyle: options?.headingStyle || 'atx',
+    codeBlockStyle: options?.codeBlockStyle || 'fenced',
+    bulletListMarker: options?.bulletListMarker || '-',
+    ...options,
+  };
+}
+
+/**
  * HTMLをMarkdownに変換
  *
  * @param html - 変換するHTML文字列
  * @param baseUrl - 相対URL解決のためのベースURL
+ * @param options - Turndownオプション（オプション）
  * @returns 変換されたMarkdown文字列
  */
 export function convertHtmlToMarkdown(
   html: string,
   baseUrl: string,
+  options?: TurndownOptions,
 ): string {
   // <base>タグを追加して相対URLを解決
   const htmlWithBase = addBaseTag(html, baseUrl);
 
   // TurndownServiceで変換
-  const service = getTurndownService();
+  // オプションが提供された場合は新しいインスタンスを作成
+  // オプションが提供されない場合はシングルトンインスタンスを使用
+  const service = options
+    ? new TurndownService(createTurndownConfig(options))
+    : getTurndownService();
   return service.turndown(htmlWithBase);
 }
 
