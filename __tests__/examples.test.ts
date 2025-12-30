@@ -196,8 +196,10 @@ describe('examples/basic-usage.ts の動作検証', () => {
         const text = await result.text();
         // ATX形式の見出しが使用されていることを確認
         expect(text).toContain('# Test');
-        // 箇条書きマーカーが '-' であることを確認
-        expect(text).toMatch(/^[-*+]\s+Item/m);
+        // 箇条書きマーカーが '-' であることを確認（-のみを厳密にチェック）
+        expect(text).toMatch(/^-\s+Item/m);
+        // *や+が含まれていないことを確認
+        expect(text).not.toMatch(/^[*+]\s+Item/m);
       }
     });
 
