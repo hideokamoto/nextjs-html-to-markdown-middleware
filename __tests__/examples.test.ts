@@ -198,6 +198,11 @@ describe('examples/basic-usage.ts の動作検証', () => {
     });
 
     it('onErrorオプションが正しく動作する', async () => {
+      // console.errorの出力を抑制
+      const consoleErrorSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+
       mockFetchError(new Error('Network error'));
 
       const customErrorHandler = vi.fn().mockReturnValue(
@@ -225,6 +230,9 @@ describe('examples/basic-usage.ts の動作検証', () => {
         const json = JSON.parse(text);
         expect(json.error).toBe('Conversion failed');
       }
+
+      // モックを復元
+      consoleErrorSpy.mockRestore();
     });
   });
 
@@ -262,6 +270,11 @@ describe('examples/basic-usage.ts の動作検証', () => {
 
   describe('examplesファイルの全オプションを組み合わせた使用例', () => {
     it('すべてのオプションを組み合わせて使用できる', async () => {
+      // console.errorの出力を抑制
+      const consoleErrorSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+
       const html = '<html><body><h1>Test</h1></body></html>';
       mockFetchSuccess(html);
 
@@ -314,6 +327,9 @@ describe('examples/basic-usage.ts の動作検証', () => {
         const text = await result.text();
         expect(text).toContain('# Test');
       }
+
+      // モックを復元
+      consoleErrorSpy.mockRestore();
     });
   });
 });
