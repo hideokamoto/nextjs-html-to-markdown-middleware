@@ -1,180 +1,235 @@
 # next-markdown-middleware
 
-Next.js Middleware用のHTML→Markdown変換ライブラリです。`.md`拡張子が付いたリクエストを自動的にHTMLページからMarkdown形式に変換します。
+A Next.js library for converting HTML pages to Markdown format. Automatically converts requests with `.md` extension to Markdown.
 
-## 特徴
+## Features
 
-- 🚀 **簡単な統合**: Next.js Middlewareに簡単に統合可能
-- 🔒 **セキュリティ**: SSRF対策、安全なヘッダー転送、リクエストサイズ制限
-- ⚡ **パフォーマンス**: キャッシュサポート、シングルトンパターンによる最適化
-- 🎨 **カスタマイズ可能**: 豊富なオプション設定
-- 📦 **TypeScript**: 完全なTypeScriptサポート
-- ⚡ **Edge Runtime対応**: Next.js Edge Runtimeで動作
-- 🔄 **Next.js互換性**: Next.js 13.0.0以上をサポート
+- **Easy Integration**: Simple integration with Next.js Middleware or Route Handlers
+- **Security**: SSRF protection, safe header forwarding, request size limits
+- **Performance**: Cache support, singleton pattern optimization
+- **Customizable**: Rich configuration options
+- **TypeScript**: Full TypeScript support
+- **Next.js Compatible**: Supports Next.js 13.0.0+ (14.0.0+ recommended)
 
-## インストール
+## Installation
 
 ```bash
-npm install next-markdown-middleware turndown
-# または
-yarn add next-markdown-middleware turndown
-# または
-pnpm add next-markdown-middleware turndown
+npm install next-markdown-middleware
+# or
+yarn add next-markdown-middleware
+# or
+pnpm add next-markdown-middleware
 ```
 
-## 基本的な使用方法
+## Usage
 
-### 1. Middlewareファイルの作成
+### Next.js App Router (Recommended)
 
-`middleware.ts`（または`middleware.js`）をプロジェクトルートに作成します：
+For Next.js App Router, use a **Route Handler with Node.js runtime** for HTML to Markdown conversion. This is required because the conversion depends on DOM parsing via jsdom.
+
+#### 1. Create Middleware
+
+Create `middleware.ts` in your project root to redirect `.md` requests:
 
 ```typescript
-import { createMarkdownMiddleware } from 'next-markdown-middleware';
-import type { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 export function middleware(request: NextRequest) {
-  return createMarkdownMiddleware()(request);
+  const { pathname } = request.nextUrl;
+
+  // Redirect .md requests to the Route Handler
+  if (pathname.endsWith('.md')) {
+    const originalPath = pathname.slice(0, -3);
+    const url = request.nextUrl.clone();
+    url.pathname = `/api/markdown${originalPath}`;
+    return NextResponse.rewrite(url);
+  }
+
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/:path*.md'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/).*)'],
 };
 ```
 
-### 2. 使用例
+#### 2. Create Route Handler
 
-`/about`ページにアクセスする代わりに、`/about.md`にアクセスすると、自動的にMarkdown形式で返されます。
-
-## オプション設定
-
-### キャッシュ設定
+Create `app/api/markdown/[...path]/route.ts`:
 
 ```typescript
-createMarkdownMiddleware({
+import { NextRequest, NextResponse } from 'next/server';
+import { convertHtmlToMarkdown } from 'next-markdown-middleware';
+
+// Node.js runtime is required for DOM parsing
+export const runtime = 'nodejs';
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { path: string[] } }
+) {
+  const path = `/${params.path.join('/')}`;
+  const baseUrl = `${request.nextUrl.protocol}//${request.nextUrl.host}`;
+  const targetUrl = `${baseUrl}${path}`;
+
+  try {
+    const response = await fetch(targetUrl, {
+      headers: {
+        'User-Agent': request.headers.get('user-agent') || '',
+        'Accept-Language': request.headers.get('accept-language') || '',
+      },
+    });
+
+    if (!response.ok) {
+      return NextResponse.json(
+        { error: 'Page not found' },
+        { status: response.status }
+      );
+    }
+
+    const html = await response.text();
+    const markdown = convertHtmlToMarkdown(html, baseUrl);
+
+    return new NextResponse(markdown, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/markdown; charset=utf-8',
+        'Cache-Control': 'public, max-age=3600',
+      },
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'Failed to convert' },
+      { status: 500 }
+    );
+  }
+}
+```
+
+#### 3. Usage
+
+Access `/about.md` instead of `/about` to get the page in Markdown format.
+
+### Next.js Pages Router
+
+For Pages Router with Node.js runtime, you can use `handleMarkdownRequest` directly:
+
+```typescript
+import { handleMarkdownRequest } from 'next-markdown-middleware';
+import type { NextRequest } from 'next/server';
+
+export async function middleware(request: NextRequest) {
+  const response = await handleMarkdownRequest(request, {
+    cache: { enabled: true, maxAge: 3600 },
+  });
+
+  if (response) return response;
+
+  // Continue to next middleware
+  return NextResponse.next();
+}
+```
+
+## Configuration Options
+
+### Cache Settings
+
+```typescript
+import { convertHtmlToMarkdown } from 'next-markdown-middleware';
+
+// In your Route Handler
+const markdown = convertHtmlToMarkdown(html, baseUrl);
+
+// Set cache headers in response
+return new NextResponse(markdown, {
+  headers: {
+    'Cache-Control': 'public, max-age=3600, s-maxage=86400',
+  },
+});
+```
+
+### Turndown Options
+
+```typescript
+convertHtmlToMarkdown(html, baseUrl, {
+  headingStyle: 'atx',        // 'atx' | 'setext'
+  codeBlockStyle: 'fenced',   // 'fenced' | 'indented'
+  bulletListMarker: '-',      // '-' | '+' | '*'
+});
+```
+
+### For handleMarkdownRequest
+
+```typescript
+handleMarkdownRequest(request, {
   cache: {
     enabled: true,
-    maxAge: 3600, // 秒単位（デフォルト: 3600）
+    maxAge: 3600,  // seconds (default: 3600)
   },
-});
-```
-
-### ヘッダー転送設定
-
-```typescript
-createMarkdownMiddleware({
   headers: {
-    // 転送するヘッダー名のリスト
     forward: ['user-agent', 'accept-language'],
-    // カスタムヘッダー
-    custom: {
-      'X-Markdown-Converted': 'true',
-    },
+    custom: { 'X-Markdown-Converted': 'true' },
   },
-});
-```
-
-### パス除外設定
-
-```typescript
-createMarkdownMiddleware({
   exclude: {
-    // 除外するパスパターン（正規表現または文字列）
     paths: ['/admin', /^\/private/],
-    // APIルートを除外するか（デフォルト: true）
-    excludeApiRoutes: true,
+    excludeApiRoutes: true,  // default: true
   },
-});
-```
-
-### Turndown設定
-
-```typescript
-createMarkdownMiddleware({
   turndown: {
-    headingStyle: 'atx', // 'atx' | 'setext'
-    codeBlockStyle: 'fenced', // 'fenced' | 'indented'
-    bulletListMarker: '-', // '-' | '+' | '*'
+    headingStyle: 'atx',
+    codeBlockStyle: 'fenced',
+    bulletListMarker: '-',
   },
-});
-```
-
-### エラーハンドリング
-
-```typescript
-createMarkdownMiddleware({
   onError: (error, request) => {
-    console.error('Markdown conversion error:', error);
-    return new Response(
-      JSON.stringify({ error: 'Conversion failed' }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      },
-    );
+    console.error('Conversion error:', error);
+    return new Response('Error', { status: 500 });
   },
+  maxRequestSize: 10 * 1024 * 1024,  // 10MB (default)
+  fetchTimeout: 30000,  // 30 seconds (default)
 });
 ```
 
-### リクエストサイズ制限
-
-```typescript
-createMarkdownMiddleware({
-  maxRequestSize: 10 * 1024 * 1024, // 10MB（デフォルト）
-});
-```
-
-### フェッチタイムアウト設定
-
-```typescript
-createMarkdownMiddleware({
-  fetchTimeout: 30000, // ミリ秒単位（デフォルト: 30000 = 30秒）
-});
-```
-
-タイムアウトが発生した場合、504（Gateway Timeout）エラーを返します。
-
-## APIリファレンス
-
-### `createMarkdownMiddleware(options?)`
-
-Markdown Middleware関数を作成します。
-
-**パラメータ:**
-- `options` (optional): `MarkdownMiddlewareOptions` - Middlewareオプション
-
-**戻り値:**
-- `(request: NextRequest) => Promise<Response | NextResponse>` - Middleware関数
-
-### `handleMarkdownRequest(request, options?)`
-
-Markdownリクエストを処理します。既存のmiddlewareに統合しやすいスタンドアロン関数です。
-
-**パラメータ:**
-- `request`: `NextRequest` - Next.jsリクエストオブジェクト
-- `options` (optional): `MarkdownMiddlewareOptions` - Middlewareオプション
-
-**戻り値:**
-- `Promise<Response | null>` - レスポンスまたはnull（処理しない場合）
+## API Reference
 
 ### `convertHtmlToMarkdown(html, baseUrl, options?)`
 
-HTMLをMarkdownに変換します。
+Converts HTML to Markdown.
 
-**パラメータ:**
-- `html`: `string` - 変換するHTML文字列
-- `baseUrl`: `string` - 相対URL解決のためのベースURL
-- `options` (optional): `TurndownOptions` - Turndownオプション
+**Parameters:**
+- `html`: `string` - HTML string to convert
+- `baseUrl`: `string` - Base URL for resolving relative URLs
+- `options` (optional): `TurndownOptions` - Turndown configuration
 
-**戻り値:**
-- `string` - 変換されたMarkdown文字列
+**Returns:**
+- `string` - Converted Markdown string
 
-## 型定義
+### `handleMarkdownRequest(request, options?)`
+
+Handles Markdown requests. Standalone function for integration with existing middleware.
+
+**Parameters:**
+- `request`: `NextRequest` - Next.js request object
+- `options` (optional): `MarkdownMiddlewareOptions` - Middleware options
+
+**Returns:**
+- `Promise<Response | null>` - Response or null (if not processed)
+
+### `createMarkdownMiddleware(options?)`
+
+Creates a Markdown Middleware function.
+
+**Parameters:**
+- `options` (optional): `MarkdownMiddlewareOptions` - Middleware options
+
+**Returns:**
+- `(request: NextRequest) => Promise<Response | NextResponse>` - Middleware function
+
+## Type Definitions
 
 ```typescript
 interface MarkdownMiddlewareOptions {
   cache?: {
     enabled: boolean;
-    maxAge?: number; // 秒単位（デフォルト: 3600）
+    maxAge?: number;  // seconds (default: 3600)
   };
   headers?: {
     forward?: string[];
@@ -182,7 +237,7 @@ interface MarkdownMiddlewareOptions {
   };
   exclude?: {
     paths?: (string | RegExp)[];
-    excludeApiRoutes?: boolean; // デフォルト: true
+    excludeApiRoutes?: boolean;  // default: true
   };
   turndown?: {
     headingStyle?: 'atx' | 'setext';
@@ -191,180 +246,137 @@ interface MarkdownMiddlewareOptions {
     [key: string]: unknown;
   };
   onError?: (error: Error, request: NextRequest) => Response | null;
-  maxRequestSize?: number; // バイト単位（デフォルト: 10MB）
-  fetchTimeout?: number; // ミリ秒単位（デフォルト: 30000 = 30秒）
+  maxRequestSize?: number;  // bytes (default: 10MB)
+  fetchTimeout?: number;    // milliseconds (default: 30000)
+}
+
+interface TurndownOptions {
+  headingStyle?: 'atx' | 'setext';
+  codeBlockStyle?: 'fenced' | 'indented';
+  bulletListMarker?: '-' | '+' | '*';
+  [key: string]: unknown;
 }
 ```
 
-## セキュリティ
+## Security
 
-このライブラリは以下のセキュリティ対策を実装しています：
+This library implements the following security measures:
 
-### SSRF対策
+### SSRF Protection
 
-- **内部リクエストのみ許可**: 外部URLへのリクエストを防ぐため、localhost、127.0.0.1、または同じホスト名のみを許可
-- **ホスト名検証**: リクエストのHostヘッダーと比較して、内部リクエストであることを確認
+- **Internal requests only**: Prevents requests to external URLs by allowing only localhost, 127.0.0.1, or same hostname
+- **Hostname validation**: Verifies internal requests by comparing with the Host header
 
-### ヘッダーインジェクション対策
+### Header Injection Protection
 
-- **安全なヘッダーのみ転送**: 許可されたヘッダー（user-agent、accept-language、accept-encoding、accept、referer、origin）のみを転送
-- **カスタムヘッダーの検証**: カスタム転送ヘッダーも安全なヘッダーリストに含まれている場合のみ転送
+- **Safe headers only**: Only forwards allowed headers (user-agent, accept-language, accept-encoding, accept, referer, origin)
+- **Custom header validation**: Custom headers are forwarded only if they're in the safe headers list
 
-### リクエストサイズ制限
+### Request Size Limits
 
-- **デフォルト制限**: 10MB（設定可能）
-- **Content-Lengthチェック**: レスポンスヘッダーのContent-Lengthを事前にチェック
-- **実際のサイズチェック**: Content-Lengthヘッダーがない場合も、実際のレスポンスサイズをチェック
+- **Default limit**: 10MB (configurable)
+- **Content-Length check**: Pre-checks response header Content-Length
+- **Actual size check**: Also checks actual response size when Content-Length is missing
 
-### Content-Type検証
+### Content-Type Validation
 
-- **HTMLコンテンツのみ許可**: レスポンスのContent-Typeが`text/html`または`application/xhtml+xml`でない場合、415（Unsupported Media Type）エラーを返します
-- **セキュリティ**: 意図しないコンテンツタイプの処理を防ぎます
+- **HTML content only**: Returns 415 (Unsupported Media Type) if Content-Type is not `text/html` or `application/xhtml+xml`
 
-### タイムアウト処理
+### Timeout Handling
 
-- **デフォルトタイムアウト**: 30秒（設定可能）
-- **タイムアウト時の動作**: タイムアウトが発生した場合、504（Gateway Timeout）エラーを返します
-- **AbortController**: 内部でAbortControllerを使用してタイムアウトを実装しています
+- **Default timeout**: 30 seconds (configurable)
+- **Timeout behavior**: Returns 504 (Gateway Timeout) when timeout occurs
+- **AbortController**: Uses AbortController internally for timeout implementation
 
-### 相対URL解決
+See [Security Documentation](./docs/SECURITY.md) for details.
 
-- **`<base>`タグの追加**: 相対URLを含むHTMLを正しく処理するため、`<base>`タグを自動的に追加
-- **既存の`<base>`タグの置き換え**: 既存の`<base>`タグがある場合は、安全なベースURLに置き換え
+## Performance
 
-### 依存関係のセキュリティ
+- **Cache headers**: Configurable cache headers
+- **Singleton pattern**: TurndownService singleton initialization
+- **Skip unnecessary processing**: Early return for excluded paths and non-.md requests
+- **Fast conversion**: Small HTML (1KB) converts in <100ms, medium (100KB) in <1s
+- **Early return**: Non-.md requests are skipped in <10ms
 
-定期的に依存関係のセキュリティチェックを実施することを推奨します：
+### Performance Testing
 
 ```bash
-npm audit
+npm run test:performance
 ```
 
-または、GitHubのDependabotやSnykなどのツールを使用して、自動的にセキュリティ更新を監視できます。
+## Next.js Compatibility
 
-詳細は[セキュリティドキュメント](./docs/SECURITY.md)を参照してください。
+### Supported Versions
 
-## パフォーマンス
+- **Next.js 13.0.0+**: Full support
+- **Next.js 14.0.0+**: Recommended
 
-- **キャッシュヘッダー**: 設定可能なキャッシュヘッダー
-- **シングルトンパターン**: TurndownServiceのシングルトン初期化
-- **不要な処理のスキップ**: 除外パスや非`.md`リクエストの早期リターン
-- **高速な変換**: 小さいHTML（1KB）は100ms以内、中サイズ（100KB）は1秒以内で変換
-- **早期リターン**: 非`.md`リクエストは10ms以内で処理をスキップ
+### Runtime Requirements
 
-### パフォーマンステスト
+- **Node.js runtime required**: HTML to Markdown conversion requires DOM parsing via jsdom
+- **Route Handler pattern**: For App Router, use Route Handlers with `runtime = 'nodejs'`
+- **Edge Runtime limitations**: Direct Edge Runtime middleware is not supported due to DOM parsing requirements
 
-```bash
-npm run test -- __tests__/performance.test.ts
-```
+See [Compatibility Documentation](./docs/COMPATIBILITY.md) for details.
 
-## Next.js互換性
-
-### サポートされているバージョン
-
-- **Next.js 13.0.0以上**: 完全サポート
-- **Next.js 14.0.0以上**: 推奨
-
-詳細は[互換性ドキュメント](./docs/COMPATIBILITY.md)を参照してください。
-
-### Edge Runtime対応
-
-このライブラリは、Next.js Edge Runtimeで動作するように設計されています。
-
-- ✅ Edge Runtimeで使用可能なAPIのみを使用
-- ✅ Node.js固有のAPIを使用していない
-- ✅ 実行時間とメモリ使用量を最適化
-
-詳細は[互換性ドキュメント](./docs/COMPATIBILITY.md)を参照してください。
-
-## 開発
+## Development
 
 ```bash
-# 依存関係のインストール
+# Install dependencies
 npm install
 
-# ビルド（ESMとCJSの両方を生成）
+# Build (generates both ESM and CJS)
 npm run build
 
-# テスト
+# Test
 npm test
 
-# テストカバレッジ（80%以上のカバレッジを目標）
+# Test coverage (target: 80%+)
 npm run test:coverage
 
-# セキュリティテスト
+# Security tests
 npm run test:security
 
-# パフォーマンステスト
+# Performance tests
 npm run test:performance
-
-# Edge Runtimeテスト
-npm run test:edge
 
 # Lint
 npm run lint
 
-# Lint修正
+# Lint fix
 npm run lint:fix
 
-# フォーマット
+# Format
 npm run format
 
-# 型チェック
+# Type check
 npm run typecheck
 ```
 
-### ビルド出力
+### Build Output
 
-ビルド後、以下のファイルが`dist/`ディレクトリに生成されます：
+After building, the following files are generated in the `dist/` directory:
 
-- `index.js` - ESM形式のメインファイル
-- `index.cjs` - CommonJS形式のメインファイル
-- `index.d.ts` - TypeScript型定義ファイル
-- その他のソースファイル（`.js`、`.cjs`、`.d.ts`）
+- `index.js` - ESM format main file
+- `index.cjs` - CommonJS format main file
+- `index.d.ts` - TypeScript type definitions
+- Other source files (`.js`, `.cjs`, `.d.ts`)
 
-## ライセンス
+## License
 
 MIT
 
-## 貢献
+## Contributing
 
-プルリクエストやイシューの報告を歓迎します！
+Pull requests and issue reports are welcome!
 
-## 注意事項
-
-### Next.jsのバージョン互換性
-
-- Next.js 13.0.0以上が必要です
-- 詳細は[互換性ドキュメント](./docs/COMPATIBILITY.md)を参照してください
-
-### Edge Runtimeでの動作
-
-- このライブラリはNext.js Edge Runtimeで動作するように設計されています
-- Node.js固有のAPIは使用していません
-- 詳細は[互換性ドキュメント](./docs/COMPATIBILITY.md)を参照してください
-
-### パフォーマンス
-
-- 小さいHTML（1KB）は100ms以内で変換されます
-- 中サイズのHTML（100KB）は1秒以内で変換されます
-- パフォーマンステストは`npm run test:performance`で実行できます
-
-### セキュリティ
-
-- SSRF対策、ヘッダーインジェクション対策、リクエストサイズ制限を実装
-- 詳細は[セキュリティドキュメント](./docs/SECURITY.md)を参照してください
-- セキュリティテストは`npm run test:security`で実行できます
-
-## 変更履歴
+## Changelog
 
 ### 0.1.0
 
-- 初回リリース
-- 基本的なHTML→Markdown変換機能
-- オプション設定のサポート
-- セキュリティ対策の実装
-- Edge Runtime対応
-- パフォーマンス最適化
-- 包括的なテストスイート
-
+- Initial release
+- Basic HTML to Markdown conversion
+- Configuration options support
+- Security measures implementation
+- Performance optimization
+- Comprehensive test suite
