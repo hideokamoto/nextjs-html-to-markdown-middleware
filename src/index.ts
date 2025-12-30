@@ -6,6 +6,11 @@
 
 export { createMarkdownMiddleware, handleMarkdownRequest } from './middleware';
 export { convertHtmlToMarkdown, resetTurndownService } from './converter';
+export {
+  createMarkdownHandler,
+  createMarkdownRewrite,
+  type MarkdownRouteHandlerOptions,
+} from './app-router';
 export type {
   MarkdownMiddlewareOptions,
   CacheOptions,

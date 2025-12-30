@@ -25,26 +25,21 @@ pnpm add next-markdown-middleware
 
 ### Next.js App Router (Recommended)
 
-For Next.js App Router, use a **Route Handler with Node.js runtime** for HTML to Markdown conversion. This is required because the conversion depends on DOM parsing via jsdom.
+For Next.js App Router, use the library's helper functions for easy integration.
 
 #### 1. Create Middleware
 
-Create `middleware.ts` in your project root to redirect `.md` requests:
+Create `middleware.ts` in your project root:
 
 ```typescript
 import { NextRequest, NextResponse } from 'next/server';
+import { createMarkdownRewrite } from 'next-markdown-middleware';
+
+const rewrite = createMarkdownRewrite('/api/markdown');
 
 export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-
-  // Redirect .md requests to the Route Handler
-  if (pathname.endsWith('.md')) {
-    const originalPath = pathname.slice(0, -3);
-    const url = request.nextUrl.clone();
-    url.pathname = `/api/markdown${originalPath}`;
-    return NextResponse.rewrite(url);
-  }
-
+  const response = rewrite(request);
+  if (response) return response;
   return NextResponse.next();
 }
 
@@ -58,52 +53,22 @@ export const config = {
 Create `app/api/markdown/[...path]/route.ts`:
 
 ```typescript
-import { NextRequest, NextResponse } from 'next/server';
-import { convertHtmlToMarkdown } from 'next-markdown-middleware';
+import { createMarkdownHandler } from 'next-markdown-middleware';
 
 // Node.js runtime is required for DOM parsing
 export const runtime = 'nodejs';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { path: string[] } }
-) {
-  const path = `/${params.path.join('/')}`;
-  const baseUrl = `${request.nextUrl.protocol}//${request.nextUrl.host}`;
-  const targetUrl = `${baseUrl}${path}`;
-
-  try {
-    const response = await fetch(targetUrl, {
-      headers: {
-        'User-Agent': request.headers.get('user-agent') || '',
-        'Accept-Language': request.headers.get('accept-language') || '',
-      },
-    });
-
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: 'Page not found' },
-        { status: response.status }
-      );
-    }
-
-    const html = await response.text();
-    const markdown = convertHtmlToMarkdown(html, baseUrl);
-
-    return new NextResponse(markdown, {
-      status: 200,
-      headers: {
-        'Content-Type': 'text/markdown; charset=utf-8',
-        'Cache-Control': 'public, max-age=3600',
-      },
-    });
-  } catch (error) {
-    return NextResponse.json(
-      { error: 'Failed to convert' },
-      { status: 500 }
-    );
-  }
-}
+export const GET = createMarkdownHandler({
+  cache: {
+    maxAge: 3600,
+    sMaxAge: 86400,
+  },
+  turndown: {
+    headingStyle: 'atx',
+    codeBlockStyle: 'fenced',
+    bulletListMarker: '-',
+  },
+});
 ```
 
 #### 3. Usage
@@ -190,7 +155,37 @@ handleMarkdownRequest(request, {
 
 ## API Reference
 
-### `convertHtmlToMarkdown(html, baseUrl, options?)`
+### App Router Helpers
+
+#### `createMarkdownHandler(options?)`
+
+Creates a Route Handler for App Router.
+
+```typescript
+import { createMarkdownHandler } from 'next-markdown-middleware';
+
+export const GET = createMarkdownHandler({
+  cache: { maxAge: 3600, sMaxAge: 86400 },
+  turndown: { headingStyle: 'atx' },
+  forwardHeaders: ['user-agent', 'accept-language'],
+  fetchTimeout: 30000,
+  onError: (error, request) => new Response('Error', { status: 500 }),
+});
+```
+
+#### `createMarkdownRewrite(apiPath?)`
+
+Creates a middleware rewrite function for `.md` requests.
+
+```typescript
+import { createMarkdownRewrite } from 'next-markdown-middleware';
+
+const rewrite = createMarkdownRewrite('/api/markdown');  // default: '/api/markdown'
+```
+
+### Core Functions
+
+#### `convertHtmlToMarkdown(html, baseUrl, options?)`
 
 Converts HTML to Markdown.
 
@@ -202,7 +197,7 @@ Converts HTML to Markdown.
 **Returns:**
 - `string` - Converted Markdown string
 
-### `handleMarkdownRequest(request, options?)`
+#### `handleMarkdownRequest(request, options?)`
 
 Handles Markdown requests. Standalone function for integration with existing middleware.
 
@@ -213,7 +208,7 @@ Handles Markdown requests. Standalone function for integration with existing mid
 **Returns:**
 - `Promise<Response | null>` - Response or null (if not processed)
 
-### `createMarkdownMiddleware(options?)`
+#### `createMarkdownMiddleware(options?)`
 
 Creates a Markdown Middleware function.
 
@@ -226,6 +221,17 @@ Creates a Markdown Middleware function.
 ## Type Definitions
 
 ```typescript
+interface MarkdownRouteHandlerOptions {
+  cache?: {
+    maxAge?: number;   // seconds (default: 3600)
+    sMaxAge?: number;  // seconds
+  };
+  turndown?: TurndownOptions;
+  forwardHeaders?: string[];
+  fetchTimeout?: number;  // milliseconds (default: 30000)
+  onError?: (error: Error, request: NextRequest) => Response | null;
+}
+
 interface MarkdownMiddlewareOptions {
   cache?: {
     enabled: boolean;
