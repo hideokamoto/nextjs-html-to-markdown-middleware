@@ -3,6 +3,12 @@ import type { TurndownOptions } from './types';
 import { addBaseTag } from './utils';
 
 /**
+ * Markdown変換時に除去するHTMLタグ
+ * Next.js App RouterのRSCペイロードなど、コンテンツ以外の要素を除去するために使用
+ */
+const TAGS_TO_REMOVE = ['script', 'style', 'noscript', 'template'] as const;
+
+/**
  * TurndownServiceのシングルトンインスタンス（デフォルト設定用）
  */
 let turndownServiceInstance: TurndownService | null = null;
@@ -16,8 +22,7 @@ let turndownServiceInstance: TurndownService | null = null;
  * @internal
  */
 function configureRemovalRules(service: TurndownService): TurndownService {
-  // script, style, noscript, template タグを除去
-  service.remove(['script', 'style', 'noscript', 'template']);
+  service.remove([...TAGS_TO_REMOVE]);
   return service;
 }
 
