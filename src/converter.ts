@@ -3,9 +3,28 @@ import type { TurndownOptions } from './types';
 import { addBaseTag } from './utils';
 
 /**
+ * Markdown変換時に除去するHTMLタグ
+ * Next.js App RouterのRSCペイロードなど、コンテンツ以外の要素を除去するために使用
+ */
+const TAGS_TO_REMOVE = ['script', 'style', 'noscript', 'template'] as const;
+
+/**
  * TurndownServiceのシングルトンインスタンス（デフォルト設定用）
  */
 let turndownServiceInstance: TurndownService | null = null;
+
+/**
+ * TurndownServiceにスクリプトやスタイルタグを除外するルールを追加
+ * Next.js App RouterのRSCペイロードなど、コンテンツ以外の要素を除去する
+ *
+ * @param service - TurndownServiceインスタンス
+ * @returns 設定済みのTurndownServiceインスタンス
+ * @internal
+ */
+function configureRemovalRules(service: TurndownService): TurndownService {
+  service.remove([...TAGS_TO_REMOVE]);
+  return service;
+}
 
 /**
  * TurndownServiceのシングルトンインスタンスを取得
@@ -22,6 +41,7 @@ function getTurndownService(): TurndownService {
       codeBlockStyle: 'fenced',
       bulletListMarker: '-',
     });
+    configureRemovalRules(turndownServiceInstance);
   }
   return turndownServiceInstance;
 }
@@ -40,8 +60,7 @@ function createTurndownConfig(options?: TurndownOptions): {
   [key: string]: unknown;
 } {
   // 既知の3つのフィールドと残りのオプションを分離
-  const { headingStyle, codeBlockStyle, bulletListMarker, ...restOptions } =
-    options || {};
+  const { headingStyle, codeBlockStyle, bulletListMarker, ...restOptions } = options || {};
 
   // デフォルト値をnullish coalescingで適用（undefinedの場合はデフォルト値を使用）
   return {
@@ -64,7 +83,7 @@ function createTurndownConfig(options?: TurndownOptions): {
 export function convertHtmlToMarkdown(
   html: string,
   baseUrl: string,
-  options?: TurndownOptions,
+  options?: TurndownOptions
 ): string {
   // <base>タグを追加して相対URLを解決
   const htmlWithBase = addBaseTag(html, baseUrl);
@@ -73,7 +92,7 @@ export function convertHtmlToMarkdown(
   // オプションが提供された場合は新しいインスタンスを作成
   // オプションが提供されない場合はシングルトンインスタンスを使用
   const service = options
-    ? new TurndownService(createTurndownConfig(options))
+    ? configureRemovalRules(new TurndownService(createTurndownConfig(options)))
     : getTurndownService();
 
   // TurndownはHTML文字列を直接受け取り、内部でjsdomを使用してDOM解析を行う
